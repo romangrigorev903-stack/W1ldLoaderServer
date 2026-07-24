@@ -7,7 +7,7 @@ const fs = require('fs');
 const config = require('./config/config');
 const logger = require('./utils/logger');
 const requestLogger = require('./middleware/requestLogger');
-const db = require('./database/db'); // Убедись, что путь к твоему файлу БД верный (db.js или database.js)
+const db = require('./database/db');
 const authRoutes = require('./routes/auth');
 const apiRoutes = require('./routes/api');
 const adminRoutes = require('./routes/admin');
@@ -36,12 +36,17 @@ if (config.launcherDistDir && fs.existsSync(config.launcherDistDir)) {
   app.use(express.static(config.launcherDistDir));
 }
 
+// --- Главная страница (Лендинг) ---
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, '../public/landing.html'));
+});
+
 // --- Routes ---
 app.use('/api', authRoutes);
 app.use('/api', apiRoutes);
 app.use('/api', adminRoutes);
 
-// --- Health check (НОВАЯ ФУНКЦИЯ) ---
+// --- Health check ---
 app.get('/health', (req, res) => {
   res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
 });
@@ -64,7 +69,6 @@ let server;
 
 async function startServer() {
   try {
-    // Если твоя БД инициализируется иначе, оставь свой код инициализации здесь
     logger.info('База данных готова к работе');
 
     server = app.listen(config.port || 3000, () => {
