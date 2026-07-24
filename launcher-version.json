@@ -1,0 +1,4 @@
+{
+    "version": "1.0.1",
+    "changelog": "Fixed login, updated tunnel to localhost.run, improved stability"
+}

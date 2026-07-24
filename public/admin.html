@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>W1ld Admin Panel</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', 'Segoe UI', Arial, sans-serif; }
+body { background: #020206; color: #fff; min-height: 100vh; padding: 20px; }
+.admin-container { max-width: 1100px; margin: 0 auto; }
+.admin-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 32px; padding-bottom: 16px; border-bottom: 1px solid rgba(255,255,255,0.06); }
+.admin-header h1 { font-size: 22px; font-weight: 800; letter-spacing: 1px; }
+.admin-header .auth-info { font-size: 13px; color: #555770; }
+.admin-header .auth-info span { color: #4ade80; font-weight: 600; }
+.tabs { display: flex; gap: 4px; margin-bottom: 24px; }
+.tab-btn { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05); color: #8889a0; padding: 10px 24px; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s; font-family: inherit; }
+.tab-btn:hover { background: rgba(255,255,255,0.06); color: #fff; }
+.tab-btn.active { background: rgba(255,255,255,0.08); color: #fff; border-color: rgba(255,255,255,0.15); }
+.tab-content { display: none; }
+.tab-content.active { display: block; animation: fadeIn 0.3s ease; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+.card { background: rgba(18,20,30,0.5); border: 1px solid rgba(255,255,255,0.05); border-radius: 16px; padding: 24px; margin-bottom: 16px; backdrop-filter: blur(10px); }
+.card-title { font-size: 15px; font-weight: 700; margin-bottom: 16px; letter-spacing: 0.3px; }
+.stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; }
+.stat-card { background: rgba(18,20,30,0.5); border: 1px solid rgba(255,255,255,0.05); border-radius: 16px; padding: 24px; text-align: center; }
+.stat-card .stat-value { font-size: 36px; font-weight: 800; color: #fff; margin-bottom: 4px; }
+.stat-card .stat-label { font-size: 13px; color: #555770; font-weight: 500; }
+.stat-card .stat-value.green { color: #4ade80; }
+.stat-card .stat-value.red { color: #ff4a4a; }
+.stat-card .stat-value.blue { color: #4a90e2; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th, td { padding: 12px 16px; text-align: left; border-bottom: 1px solid rgba(255,255,255,0.04); }
+th { font-size: 12px; font-weight: 600; color: #555770; text-transform: uppercase; letter-spacing: 0.5px; }
+.badge { display: inline-block; padding: 4px 10px; border-radius: 100px; font-size: 12px; font-weight: 600; }
+.badge.active { background: rgba(74,222,128,0.1); color: #4ade80; }
+.banned { background: rgba(255,74,74,0.1); color: #ff4a4a; }
+.btn { padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; border: none; transition: all 0.2s; font-family: inherit; }
+.btn-primary { background: #fff; color: #000; }
+.btn-primary:hover { opacity: 0.9; }
+.btn-danger { background: rgba(255,74,74,0.1); color: #ff4a4a; border: 1px solid rgba(255,74,74,0.15); }
+.btn-danger:hover { background: rgba(255,74,74,0.2); }
+.btn-success { background: rgba(74,222,128,0.1); color: #4ade80; border: 1px solid rgba(74,222,128,0.15); }
+.btn-success:hover { background: rgba(74,222,128,0.2); }
+.btn-secondary { background: rgba(255,255,255,0.03); color: #8889a0; border: 1px solid rgba(255,255,255,0.05); }
+.btn-secondary:hover { background: rgba(255,255,255,0.06); }
+.form-group { margin-bottom: 16px; }
+.form-group label { display: block; font-size: 13px; color: #8889a0; margin-bottom: 6px; font-weight: 500; }
+.form-group input[type="text"], .form-group input[type="password"], .form-group input[type="number"] { width: 100%; background: rgba(10,11,18,0.6); border: 1px solid rgba(255,255,255,0.04); padding: 12px 16px; border-radius: 10px; color: #fff; font-size: 14px; outline: none; font-family: inherit; }
+.form-group input:focus { border-color: rgba(255,255,255,0.15); }
+.form-group input[type="file"] { padding: 8px; }
+.msg { font-size: 13px; margin-top: 12px; padding: 10px 14px; border-radius: 10px; display: none; font-weight: 500; }
+.msg.success { display: block; color: #4ade80; background: rgba(74,222,128,0.06); border: 1px solid rgba(74,222,128,0.1); }
+.msg.error { display: block; color: #ff4a4a; background: rgba(255,74,74,0.06); border: 1px solid rgba(255,74,74,0.1); }
+.login-form { max-width: 400px; margin: 60px auto; }
+.login-form h2 { text-align: center; margin-bottom: 24px; font-size: 20px; font-weight: 700; }
+.back-link { display: inline-block; margin-bottom: 16px; color: #4a90e2; font-size: 13px; text-decoration: none; cursor: pointer; }
+.back-link:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+
+<div class="admin-container" id="adminApp">
+
+    <!-- Login Screen -->
+    <div id="loginScreen" class="login-form">
+        <h2>Admin Login</h2>
+        <div class="card">
+            <div class="form-group">
+                <label>Username</label>
+                <input type="text" id="adminUsername" placeholder="Enter username">
+            </div>
+            <div class="form-group">
+                <label>Password</label>
+                <input type="password" id="adminPassword" placeholder="Enter password">
+            </div>
+            <button class="btn btn-primary" id="adminLoginBtn" style="width:100%;">Login</button>
+            <div class="msg" id="loginMsg"></div>
+        </div>
+    </div>
+
+    <!-- Admin Dashboard -->
+    <div id="dashboardScreen" style="display:none;">
+        <div class="admin-header">
+            <h1>W1ld Admin Panel</h1>
+            <div class="auth-info">Logged in as <span id="adminUser"></span> | <a href="#" id="logoutBtn" style="color:#ff4a4a;text-decoration:none;font-size:13px;">Logout</a></div>
+        </div>
+
+        <div class="tabs">
+            <button class="tab-btn active" data-tab="stats">Statistics</button>
+            <button class="tab-btn" data-tab="users">Users</button>
+            <button class="tab-btn" data-tab="files">Files</button>
+        </div>
+
+        <!-- Stats Tab -->
+        <div class="tab-content active" id="tab-stats">
+            <div class="card"><div class="card-title">Statistics</div>
+                <div class="stats-grid">
+                    <div class="stat-card"><div class="stat-value blue" id="statTotalUsers">-</div><div class="stat-label">Total Users</div></div>
+                    <div class="stat-card"><div class="stat-value green" id="statActive24h">-</div><div class="stat-label">Active Last 24h</div></div>
+                    <div class="stat-card"><div class="stat-value" id="statBanned">-</div><div class="stat-label">Banned</div></div>
+                    <div class="stat-card"><div class="stat-value blue" id="statAdmins">-</div><div class="stat-label">Admins</div></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Users Tab -->
+        <div class="tab-content" id="tab-users">
+            <div class="card"><div class="card-title">Users</div>
+                <div style="margin-bottom:16px;"><input type="text" id="userSearch" placeholder="Search users..." style="width:100%;padding:10px 16px;background:rgba(10,11,18,0.6);border:1px solid rgba(255,255,255,0.04);border-radius:10px;color:#fff;font-size:14px;outline:none;"></div>
+                <div style="overflow-x:auto;"><table><thead><tr><th>ID</th><th>Username</th><th>Status</th><th>Admin</th><th>Banned</th><th>Actions</th></tr></thead><tbody id="usersTableBody"></tbody></table></div>
+                <div id="usersMsg" class="msg"></div>
+            </div>
+        </div>
+
+        <!-- Files Tab -->
+        <div class="tab-content" id="tab-files">
+            <div class="card">
+                <div class="card-title">Upload Client File</div>
+                <form id="uploadForm">
+                    <div class="form-group">
+                        <label>Select File (.zip or .exe)</label>
+                        <input type="file" id="clientFile" accept=".zip,.exe" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Version</label>
+                        <input type="text" id="clientVersion" placeholder="e.g. 1.0.0" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Upload</button>
+                </form>
+                <div id="uploadMsg" class="msg"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="js/admin.js"></script>
+</body>
+</html>
