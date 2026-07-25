@@ -13,8 +13,11 @@ node_modules/
 w1ld_auth.db*
 
 # Storage
-storage/
+storage/*
 !storage/.gitkeep
+!storage/clients/
+storage/clients/*
+!storage/clients/*.jar
 
 # Logs
 *.log
