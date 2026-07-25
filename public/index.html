@@ -297,6 +297,54 @@ body::before {
 .modal-actions { display: flex; gap: 10px; margin-top: 16px; }
 .modal-actions .btn { margin-top: 0; }
 
+/* ===== SIDE SECTIONS ===== */
+.side-section {
+    width: 100%;
+    max-width: 760px;
+    margin-top: 24px;
+    animation: cardIn 1s cubic-bezier(0.16,1,0.3,1) forwards;
+}
+.side-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: #555770;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 12px;
+    padding-left: 4px;
+}
+.news-feed, .clients-feed { display: flex; flex-direction: column; gap: 10px; }
+.news-item {
+    background: rgba(18,20,30,0.5);
+    border: 1px solid rgba(255,255,255,0.05);
+    border-radius: 14px;
+    padding: 16px 20px;
+    backdrop-filter: blur(20px);
+    transition: border-color .2s;
+}
+.news-item:hover { border-color: rgba(255,255,255,0.1); }
+.news-item-date { font-size: 11px; color: #555770; font-weight: 600; letter-spacing: .5px; text-transform: uppercase; margin-bottom: 4px; }
+.news-item-title { font-size: 14px; font-weight: 700; margin-bottom: 4px; }
+.news-item-body { font-size: 13px; color: #8889a0; line-height: 1.5; }
+.client-item {
+    background: rgba(18,20,30,0.5);
+    border: 1px solid rgba(255,255,255,0.05);
+    border-radius: 14px;
+    padding: 16px 20px;
+    backdrop-filter: blur(20px);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    transition: border-color .2s;
+}
+.client-item:hover { border-color: rgba(255,255,255,0.1); }
+.client-info h4 { font-size: 14px; font-weight: 700; margin-bottom: 3px; }
+.client-info p { font-size: 12px; color: #8889a0; }
+.client-dl { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); color: #fff; padding: 8px 16px; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; text-decoration: none; white-space: nowrap; transition: background .2s; }
+.client-dl:hover { background: rgba(255,255,255,0.1); }
+.side-empty { font-size: 13px; color: #555770; padding: 16px 4px; }
+
 /* ===== RESPONSIVE ===== */
 @media (max-width: 800px) {
     .cards-row { flex-direction: column; align-items: center; }
@@ -398,8 +446,20 @@ body::before {
         <button class="download-btn" id="downloadLauncherBtn">Скачать</button>
     </div>
 
+    <!-- NEWS FEED -->
+    <div class="side-section" id="newsSection">
+        <div class="side-title">📢 Новости</div>
+        <div class="news-feed" id="newsFeed"><div class="side-empty">Загрузка...</div></div>
+    </div>
+
+    <!-- CLIENTS -->
+    <div class="side-section" id="clientsSection">
+        <div class="side-title">🎮 Доступные клиенты</div>
+        <div class="clients-feed" id="clientsFeed"><div class="side-empty">Загрузка...</div></div>
+    </div>
+
     <div class="footer">
-        <p>W1ld Auth Server v1.0.0 · <a href="#" id="copyServerUrl">Скопировать адрес сервера</a></p>
+        <p>W1ld Auth Server v2.0.0 · <a href="#" id="copyServerUrl">Скопировать адрес сервера</a> · <a href="/landing.html">Сайт</a></p>
     </div>
 </div>
 
@@ -629,7 +689,54 @@ document.getElementById('copyServerUrl').addEventListener('click', (e) => {
     });
 });
 
-// ===== ENTER KEY SUPPORT =====
+// ===== NEWS =====
+async function loadNewsFeed() {
+    try {
+        const res = await fetch('/api/news');
+        const data = await res.json();
+        const feed = document.getElementById('newsFeed');
+        if (!feed) return;
+        if (!data.success || !data.news || !data.news.length) {
+            feed.innerHTML = '<div class="side-empty">Новостей пока нет.</div>';
+            return;
+        }
+        feed.innerHTML = data.news.slice(0, 5).map(n => `
+            <div class="news-item">
+                <div class="news-item-date">${new Date(n.timestamp || Date.now()).toLocaleDateString('ru-RU')}</div>
+                <div class="news-item-title">${escHtml(n.title)}</div>
+                <div class="news-item-body">${escHtml((n.content||'').substring(0,150))}${(n.content||'').length>150?'...':''}</div>
+            </div>`).join('');
+    } catch(e) {}
+}
+
+// ===== CLIENTS =====
+async function loadClientsFeed() {
+    try {
+        const res = await fetch('/api/clients');
+        const data = await res.json();
+        const feed = document.getElementById('clientsFeed');
+        if (!feed) return;
+        if (!data.success || !data.clients || !data.clients.length) {
+            feed.innerHTML = '<div class="side-empty">Клиентов нет.</div>';
+            return;
+        }
+        feed.innerHTML = data.clients.map(c => `
+            <div class="client-item">
+                <div class="client-info">
+                    <h4>${escHtml(c.name)} <span style="color:#555770;font-weight:400;font-size:12px;">v${escHtml(c.version)}</span></h4>
+                    <p>${escHtml((c.description||'').substring(0,80))}</p>
+                </div>
+                ${c.download_url ? `<a href="${escHtml(c.download_url)}" class="client-dl">⬇ Скачать</a>` : ''}
+            </div>`).join('');
+    } catch(e) {}
+}
+
+function escHtml(t) {
+    return (t||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+loadNewsFeed();
+loadClientsFeed();
 document.getElementById('loginPass').addEventListener('keydown', (e) => {
     if (e.key === 'Enter') document.getElementById('loginBtn').click();
 });
