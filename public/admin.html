@@ -231,8 +231,16 @@ tbody tr:hover{background:rgba(255,255,255,0.02);}
                 <div class="card-title">Загрузить файл клиента</div>
                 <form id="uploadForm">
                     <div class="form-group">
-                        <label>Выберите файл (.zip или .exe)</label>
-                        <input type="file" id="clientFile" accept=".zip,.exe" required>
+                        <label>Тип файла</label>
+                        <select id="jarType" class="search-input">
+                            <option value="wild">wild.jar — клиент-мод</option>
+                            <option value="fabric-api">fabric-api.jar</option>
+                            <option value="baritone">baritone.jar</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Выберите файл (.jar, .zip или .exe)</label>
+                        <input type="file" id="clientFile" accept=".jar,.zip,.exe" required>
                     </div>
                     <div class="form-group">
                         <label>Версия</label>

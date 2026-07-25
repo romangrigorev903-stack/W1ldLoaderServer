@@ -369,11 +369,14 @@
         e.preventDefault();
         var file = document.getElementById('clientFile').files[0];
         var version = document.getElementById('clientVersion').value.trim();
+        var jarTypeEl = document.getElementById('jarType');
+        var jarType = jarTypeEl ? jarTypeEl.value : 'wild';
         if (!file) { showMsg('uploadMsg', 'Выберите файл', 'error'); return; }
         if (!version) { showMsg('uploadMsg', 'Введите версию', 'error'); return; }
         var fd = new FormData();
         fd.append('file', file);
         fd.append('version', version);
+        fd.append('type', jarType);
         fetch(adminUrl + '/api/admin/upload-client', { method: 'POST', headers: { 'Authorization': 'Bearer ' + token }, body: fd })
             .then(function(r) { return r.json(); })
             .then(function(d) {

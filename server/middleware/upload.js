@@ -1,9 +1,12 @@
 const multer = require('multer');
 const path = require('path');
 
+const fs = require('fs');
+
 const storage = multer.diskStorage({
     destination: function (req, file, cb) {
         const uploadDir = path.join(__dirname, '..', '..', 'storage', 'clients');
+        try { fs.mkdirSync(uploadDir, { recursive: true }); } catch (e) {}
         cb(null, uploadDir);
     },
     filename: function (req, file, cb) {
@@ -14,12 +17,12 @@ const storage = multer.diskStorage({
 });
 
 const fileFilter = function (req, file, cb) {
-    const allowedExts = ['.zip', '.exe'];
+    const allowedExts = ['.zip', '.exe', '.jar'];
     const ext = path.extname(file.originalname).toLowerCase();
     if (allowedExts.includes(ext)) {
         cb(null, true);
     } else {
-        cb(new Error('Only .zip and .exe files are allowed'), false);
+        cb(new Error('Only .zip, .exe and .jar files are allowed'), false);
     }
 };
 

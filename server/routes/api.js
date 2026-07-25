@@ -2,7 +2,6 @@ const express = require('express');
 const router = express.Router();
 const fs = require('fs');
 const path = require('path');
-const { ZipArchive } = require('archiver');
 const config = require('../config/config');
 const helpers = require('../utils/helpers');
 const cache = require('../utils/cache');
@@ -71,49 +70,35 @@ router.get('/client-version', (req, res) => {
     res.json({ success: true, version: '1.0.1', changelog: 'Исправлено скачивание, улучшена стабильность' });
 });
 
-router.get('/download-client', (req, res) => {
-    try {
-        const projectPath = path.isAbsolute(config.clientProjectPath)
-            ? config.clientProjectPath
-            : path.join(__dirname, '..', '..', config.clientProjectPath);
-
-        if (!fs.existsSync(projectPath)) {
-            return res.status(404).json({ success: false, error: 'Проект не найден' });
-        }
-
-        console.log('[Zip] Creating archive from:', projectPath);
-
-        res.writeHead(200, {
-            'Content-Type': 'application/zip',
-            'Content-Disposition': 'attachment; filename="w1ld-client.zip"',
-        });
-
-        const archive = new ZipArchive();
-        archive.pipe(res);
-
-        archive.glob('**', {
-            cwd: projectPath,
-            ignore: [
-                '.gradle/**',
-                'build/**',
-                '.idea/**',
-                'node_modules/**',
-                '*.log',
-                '.git/**',
-            ],
-        });
-        archive.finalize();
-
-        archive.on('end', () => {
-            console.log('[Zip] Archive sent successfully');
-        });
-        archive.on('error', (err) => {
-            console.error('[Zip] Error:', err);
-        });
-    } catch (err) {
-        console.error('[Zip] Error:', err);
-        res.status(500).json({ success: false, error: 'Ошибка создания архива' });
+// Отдаёт jar-файл из стабильного слота storage/clients/<slotName>.
+function serveJarSlot(res, slotName, downloadName) {
+    const jarPath = path.join(__dirname, '..', '..', 'storage', 'clients', slotName);
+    if (!fs.existsSync(jarPath)) {
+        return res.status(404).json({ success: false, error: slotName + ' не загружен на сервер' });
     }
+    const stat = fs.statSync(jarPath);
+    res.writeHead(200, {
+        'Content-Type': 'application/java-archive',
+        'Content-Length': stat.size,
+        'Content-Disposition': 'attachment; filename="' + (downloadName || slotName) + '"',
+    });
+    fs.createReadStream(jarPath).pipe(res);
+    console.log('[Jar] Sent:', slotName);
+}
+
+// wild.jar — сам мод-клиент.
+router.get('/download-client', (req, res) => {
+    serveJarSlot(res, 'wild.jar', 'wild.jar');
+});
+
+// fabric-api.jar
+router.get('/download-fabric-api', (req, res) => {
+    serveJarSlot(res, 'fabric-api.jar', 'fabric-api.jar');
+});
+
+// baritone.jar (опционально)
+router.get('/download-baritone', (req, res) => {
+    serveJarSlot(res, 'baritone.jar', 'baritone.jar');
 });
 
 router.get('/download-launcher', (req, res) => {
