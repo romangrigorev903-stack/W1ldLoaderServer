@@ -87,6 +87,30 @@ async function seedAdminUser() {
   }
 }
 
+function startKeepAlive() {
+  // Self-ping: не даём Render заснуть (подстраховка к внешнему монитору UptimeRobot).
+  // Включается только если задана переменная окружения SELF_PING_URL.
+  const url = process.env.SELF_PING_URL;
+  if (!url) return;
+
+  const https = require('https');
+  const http = require('http');
+  const client = url.startsWith('https') ? https : http;
+  const target = url.replace(/\/$/, '') + '/health';
+  const intervalMs = 13 * 60 * 1000; // каждые 13 минут (< 15 мин таймаута Render)
+
+  setInterval(() => {
+    const req = client.get(target, (res) => {
+      res.resume(); // сбрасываем тело ответа
+      logger.info(`Keep-alive ping: ${res.statusCode}`);
+    });
+    req.on('error', (err) => logger.warn(`Keep-alive ping failed: ${err.message}`));
+    req.setTimeout(15000, () => req.destroy());
+  }, intervalMs);
+
+  logger.info(`Keep-alive включён: ${target} каждые 13 мин`);
+}
+
 async function startServer() {
   try {
     await seedAdminUser();
@@ -95,6 +119,7 @@ async function startServer() {
     server = app.listen(config.port || 3000, () => {
       logger.info(`W1ld Auth Server v2.0.0 started on port ${config.port || 3000}`);
       logger.info(`Environment: ${process.env.NODE_ENV || 'development'}`);
+      startKeepAlive();
     });
   } catch (error) {
     logger.error('Ошибка при запуске сервера:', error);
