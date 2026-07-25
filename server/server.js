@@ -11,6 +11,7 @@ const db = require('./database/db');
 const authRoutes = require('./routes/auth');
 const apiRoutes = require('./routes/api');
 const adminRoutes = require('./routes/admin');
+const { hashPassword, getUserByUsername, createUser } = require('./services/userService');
 
 const app = express();
 
@@ -67,8 +68,28 @@ app.use((err, req, res, next) => {
 // --- Start server ---
 let server;
 
+async function seedAdminUser() {
+  // Гарантирует наличие админ-аккаунта после каждого запуска (важно для Render:
+  // на бесплатном плане файловая система эфемерна и БД сбрасывается при редеплое).
+  const username = process.env.ADMIN_USERNAME || 'admin';
+  const password = process.env.ADMIN_PASSWORD || 'w1ld_admin_2026';
+  try {
+    const existing = getUserByUsername(username);
+    if (existing) {
+      logger.info(`Админ-аккаунт "${username}" уже существует`);
+      return;
+    }
+    const hashed = await hashPassword(password);
+    createUser(username, hashed, 1);
+    logger.info(`Создан админ-аккаунт по умолчанию: "${username}"`);
+  } catch (error) {
+    logger.error(`Не удалось создать админ-аккаунт: ${error.message}`);
+  }
+}
+
 async function startServer() {
   try {
+    await seedAdminUser();
     logger.info('База данных готова к работе');
 
     server = app.listen(config.port || 3000, () => {
