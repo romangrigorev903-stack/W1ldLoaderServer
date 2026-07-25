@@ -1,5 +1,7 @@
 const express = require('express');
 const router = express.Router();
+const path = require('path');
+const fs = require('fs');
 const db = require('../database/db');
 const userService = require('../services/userService');
 const statsService = require('../services/statsService');
@@ -390,6 +392,13 @@ router.post('/users/:id/unban', async (req, res, next) => {
 
 // ===== UPLOAD CLIENT =====
 
+// Стабильные имена «слотов» — по ним отдаются файлы лаунчеру.
+const JAR_SLOTS = {
+    'wild': 'wild.jar',
+    'fabric-api': 'fabric-api.jar',
+    'baritone': 'baritone.jar',
+};
+
 router.post('/upload-client', upload.single('file'), async (req, res, next) => {
     try {
         if (!req.file) {
@@ -397,25 +406,40 @@ router.post('/upload-client', upload.single('file'), async (req, res, next) => {
         }
 
         const version = req.body.version || '1.0.0';
-        const fileName = req.file.filename;
-        const filePath = req.file.path;
+        const ext = path.extname(req.file.originalname).toLowerCase();
 
-        const clientsData = {
-            version: version,
-            fileName: fileName,
-            filePath: filePath,
-            uploadedAt: new Date().toISOString()
-        };
+        // Для .jar кладём в стабильный слот (wild/fabric-api/baritone), чтобы лаунчер тянул по фикс-имени.
+        if (ext === '.jar') {
+            const type = (req.body.type || 'wild').toLowerCase();
+            const slotName = JAR_SLOTS[type];
+            if (!slotName) {
+                try { fs.unlinkSync(req.file.path); } catch (e) {}
+                return res.json({ success: false, error: 'Неизвестный тип jar: ' + type });
+            }
+            const dir = path.join(__dirname, '..', '..', 'storage', 'clients');
+            const slotPath = path.join(dir, slotName);
+            try {
+                fs.copyFileSync(req.file.path, slotPath);
+                fs.unlinkSync(req.file.path);
+            } catch (e) {
+                return res.json({ success: false, error: 'Ошибка сохранения: ' + e.message });
+            }
+            return res.json({
+                success: true,
+                message: 'Jar загружен в слот «' + type + '»',
+                file: { originalName: req.file.originalname, slot: type, filename: slotName, size: req.file.size, version: version }
+            });
+        }
 
         res.json({
             success: true,
             message: 'Файл загружен',
             file: {
                 originalName: req.file.originalname,
-                filename: fileName,
+                filename: req.file.filename,
                 size: req.file.size,
                 version: version,
-                path: filePath
+                path: req.file.path
             }
         });
     } catch (err) {
