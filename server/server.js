@@ -16,7 +16,18 @@ const { hashPassword, getUserByUsername, createUser } = require('./services/user
 const app = express();
 
 // --- Middleware ---
-app.use(helmet());
+// CSP по умолчанию у Helmet блокирует инлайновые <script> (script-src 'self'),
+// а все страницы в public/ используют инлайновый JS — из-за этого кнопки не работали.
+// Разрешаем инлайн-скрипты, остальные защиты Helmet оставляем.
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      ...helmet.contentSecurityPolicy.getDefaultDirectives(),
+      'script-src': ["'self'", "'unsafe-inline'"],
+      'script-src-attr': ["'unsafe-inline'"],
+    },
+  },
+}));
 app.use(cors(config.corsOptions || { origin: true, credentials: true }));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
