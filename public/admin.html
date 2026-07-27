@@ -117,6 +117,7 @@ tbody tr:hover{background:rgba(255,255,255,0.02);}
             <button class="tab-btn" data-tab="users">👥 Пользователи</button>
             <button class="tab-btn" data-tab="news">📢 Новости</button>
             <button class="tab-btn" data-tab="clients">🎮 Клиенты</button>
+            <button class="tab-btn" data-tab="multi-clients">🎯 Мульти-клиенты</button>
             <button class="tab-btn" data-tab="buttons">🔘 Кнопки</button>
             <button class="tab-btn" data-tab="files">📁 Файлы</button>
         </div>
@@ -199,6 +200,33 @@ tbody tr:hover{background:rgba(255,255,255,0.02);}
             <div class="card">
                 <div class="card-title">Список клиентов</div>
                 <div class="item-list" id="clientsList"><div class="empty">Загрузка...</div></div>
+            </div>
+        </div>
+
+        <!-- Multi-Clients Tab -->
+        <div class="tab-content" id="tab-multi-clients">
+            <div class="card">
+                <div class="card-title" id="mcFormTitle">Добавить мульти-клиент</div>
+                <div class="form-row">
+                    <div class="form-group"><label>Название</label><input type="text" id="mcName" placeholder="W1ld Client"></div>
+                    <div class="form-group"><label>Версия Minecraft</label><input type="text" id="mcMcVersion" placeholder="1.21.8"></div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group"><label>Загрузчик</label><select id="mcLoaderType" class="search-input"><option value="fabric">Fabric</option><option value="forge">Forge</option><option value="vanilla">Vanilla</option><option value="quilt">Quilt</option></select></div>
+                    <div class="form-group"><label>Версия загрузчика</label><input type="text" id="mcLoaderVersion" placeholder="0.19.3"></div>
+                </div>
+                <div class="form-group"><label>URL баннера (опционально)</label><input type="text" id="mcBannerUrl" placeholder="https://..."></div>
+                <div class="form-group"><label>Описание</label><textarea id="mcDescription" placeholder="Описание клиента..."></textarea></div>
+                <div class="checkbox-row"><input type="checkbox" id="mcActive" checked><label for="mcActive">Активен</label></div>
+                <div class="checkbox-row"><input type="checkbox" id="mcBeta"><label for="mcBeta">Бета</label></div>
+                <div class="checkbox-row"><input type="checkbox" id="mcPremium"><label for="mcPremium">Премиум</label></div>
+                <button class="btn btn-primary" id="saveMcBtn">Сохранить</button>
+                <button class="btn btn-secondary" id="cancelMcBtn" style="display:none;">Отмена</button>
+                <div class="msg" id="mcMsg"></div>
+            </div>
+            <div class="card">
+                <div class="card-title">Список мульти-клиентов</div>
+                <div class="item-list" id="mcList"><div class="empty">Загрузка...</div></div>
             </div>
         </div>
 

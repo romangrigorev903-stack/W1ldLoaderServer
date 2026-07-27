@@ -61,7 +61,7 @@
         document.getElementById('dashboardScreen').style.display = 'block';
         var el = document.getElementById('adminUser');
         if (el) el.textContent = username || localStorage.getItem('launcher_username') || 'Admin';
-        loadStats(); loadUsers(); loadNews(); loadClients(); loadButtons();
+        loadStats(); loadUsers(); loadNews(); loadClients(); loadMultiClients(); loadButtons();
     }
 
     // Auto-login if token exists
@@ -75,6 +75,14 @@
             btn.classList.add('active');
             var tab = document.getElementById('tab-' + btn.getAttribute('data-tab'));
             if (tab) tab.classList.add('active');
+            // Загружаем данные при открытии вкладки
+            var tabName = btn.getAttribute('data-tab');
+            if (tabName === 'multi-clients') loadMultiClients();
+            if (tabName === 'clients') loadClients();
+            if (tabName === 'buttons') loadButtons();
+            if (tabName === 'news') loadNews();
+            if (tabName === 'users') loadUsers();
+            if (tabName === 'stats') loadStats();
         });
     });
 
@@ -361,6 +369,97 @@
         document.getElementById('btnActive').checked = true;
         document.getElementById('buttonFormTitle').textContent = 'Добавить кнопку';
         cancelButtonBtn.style.display = 'none';
+    });
+
+    // ===== MULTI-CLIENTS =====
+    var editingMc = null;
+    window.loadMultiClients = function() {
+        api('/api/admin/clients-config').then(function(r) { return r.json(); }).then(function(d) {
+            var list = document.getElementById('mcList');
+            if (!list) return;
+            if (!d.success || !d.clients || !d.clients.length) { list.innerHTML = '<div class="empty">Мульти-клиентов нет. Добавьте первого!</div>'; return; }
+            list.innerHTML = d.clients.map(function(c) {
+                var loaderLabel = c.loader_type === 'vanilla' ? 'Vanilla' : (c.loader_type.charAt(0).toUpperCase() + c.loader_type.slice(1) + ' ' + c.loader_version);
+                return '<div class="item-row"><div class="item-info"><h4>' + esc(c.name) + ' <span style="color:#8889a0;font-weight:400;">MC ' + esc(c.mc_version) + '</span>' +
+                    (c.is_active ? ' <span class="badge active" style="font-size:11px;">Активен</span>' : ' <span class="badge banned" style="font-size:11px;">Неактивен</span>') +
+                    (c.is_beta ? ' <span class="badge admin" style="font-size:11px;">Бета</span>' : '') +
+                    (c.is_premium ? ' <span class="badge admin" style="font-size:11px;">Premium</span>' : '') +
+                    '</h4><p>' + esc((c.description||'').substring(0,80)) + ' · ' + esc(loaderLabel) + '</p></div>' +
+                    '<div class="item-actions"><button class="btn btn-secondary btn-sm" onclick="editMc(' + JSON.stringify(c).replace(/"/g,'"') + ')">✏️</button>' +
+                    '<button class="btn btn-danger btn-sm" onclick="deleteMc(' + c.id + ')">🗑️</button></div></div>';
+            }).join('');
+        }).catch(function() {});
+    };
+
+    window.editMc = function(c) {
+        editingMc = c.id;
+        document.getElementById('mcName').value = c.name || '';
+        document.getElementById('mcMcVersion').value = c.mc_version || '';
+        document.getElementById('mcLoaderType').value = c.loader_type || 'fabric';
+        document.getElementById('mcLoaderVersion').value = c.loader_version || '';
+        document.getElementById('mcBannerUrl').value = c.banner_url || '';
+        document.getElementById('mcDescription').value = c.description || '';
+        document.getElementById('mcActive').checked = !!c.is_active;
+        document.getElementById('mcBeta').checked = !!c.is_beta;
+        document.getElementById('mcPremium').checked = !!c.is_premium;
+        document.getElementById('mcFormTitle').textContent = 'Редактировать мульти-клиент';
+        document.getElementById('cancelMcBtn').style.display = 'inline-block';
+    };
+
+    window.deleteMc = function(id) {
+        if (!confirm('Удалить мульти-клиент?')) return;
+        api('/api/admin/clients-config/' + id, { method: 'DELETE' }).then(function(r) { return r.json(); }).then(function(d) {
+            toast(d.success ? 'Мульти-клиент удалён' : (d.error || 'Ошибка'), d.success ? 'success' : 'error');
+            if (d.success) loadMultiClients();
+        }).catch(function() {});
+    };
+
+    var saveMcBtn = document.getElementById('saveMcBtn');
+    if (saveMcBtn) saveMcBtn.addEventListener('click', function() {
+        var name = document.getElementById('mcName').value.trim();
+        var mcVersion = document.getElementById('mcMcVersion').value.trim();
+        if (!name || !mcVersion) { showMsg('mcMsg', 'Заполните название и версию MC', 'error'); return; }
+        var body = {
+            name: name,
+            mc_version: mcVersion,
+            loader_type: document.getElementById('mcLoaderType').value,
+            loader_version: document.getElementById('mcLoaderVersion').value.trim(),
+            banner_url: document.getElementById('mcBannerUrl').value.trim(),
+            description: document.getElementById('mcDescription').value.trim(),
+            is_active: document.getElementById('mcActive').checked,
+            is_beta: document.getElementById('mcBeta').checked,
+            is_premium: document.getElementById('mcPremium').checked,
+            mods: [],
+            jvm_args: []
+        };
+        var method = editingMc ? 'PUT' : 'POST';
+        var path = editingMc ? '/api/admin/clients-config/' + editingMc : '/api/admin/clients-config';
+        api(path, { method: method, body: JSON.stringify(body) }).then(function(r) { return r.json(); }).then(function(d) {
+            if (d.success) {
+                showMsg('mcMsg', editingMc ? 'Обновлено' : 'Создано', 'success');
+                ['mcName','mcMcVersion','mcLoaderVersion','mcBannerUrl','mcDescription'].forEach(function(id) { document.getElementById(id).value = ''; });
+                document.getElementById('mcLoaderType').value = 'fabric';
+                document.getElementById('mcActive').checked = true;
+                document.getElementById('mcBeta').checked = false;
+                document.getElementById('mcPremium').checked = false;
+                editingMc = null;
+                document.getElementById('mcFormTitle').textContent = 'Добавить мульти-клиент';
+                document.getElementById('cancelMcBtn').style.display = 'none';
+                loadMultiClients();
+            } else { showMsg('mcMsg', d.error || 'Ошибка', 'error'); }
+        }).catch(function() { showMsg('mcMsg', 'Ошибка', 'error'); });
+    });
+
+    var cancelMcBtn = document.getElementById('cancelMcBtn');
+    if (cancelMcBtn) cancelMcBtn.addEventListener('click', function() {
+        editingMc = null;
+        ['mcName','mcMcVersion','mcLoaderVersion','mcBannerUrl','mcDescription'].forEach(function(id) { document.getElementById(id).value = ''; });
+        document.getElementById('mcLoaderType').value = 'fabric';
+        document.getElementById('mcActive').checked = true;
+        document.getElementById('mcBeta').checked = false;
+        document.getElementById('mcPremium').checked = false;
+        document.getElementById('mcFormTitle').textContent = 'Добавить мульти-клиент';
+        cancelMcBtn.style.display = 'none';
     });
 
     // ===== FILE UPLOAD =====
