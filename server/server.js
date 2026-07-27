@@ -11,6 +11,8 @@ const db = require('./database/db');
 const authRoutes = require('./routes/auth');
 const apiRoutes = require('./routes/api');
 const adminRoutes = require('./routes/admin');
+const { authenticateToken } = require('./middleware/auth');
+const { requireAdmin } = require('./middleware/admin');
 const { hashPassword, getUserByUsername, createUser } = require('./services/userService');
 
 const app = express();
@@ -28,20 +30,31 @@ app.use(helmet({
     },
   },
 }));
-app.use(cors(config.corsOptions || { origin: true, credentials: true }));
+app.use(cors({ origin: config.corsOrigin || '*' }));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(requestLogger);
 
-// --- Rate Limit ---
+// --- Rate Limit (общий) ---
 const limiter = rateLimit({
-  windowMs: config.rateLimitWindow || 15 * 60 * 1000,
+  windowMs: config.rateLimitWindowMs || 15 * 60 * 1000,
   max: config.rateLimitMax || 100,
   message: { error: 'Слишком много запросов, попробуйте позже.' },
   standardHeaders: true,
   legacyHeaders: false
 });
 app.use(limiter);
+
+// --- Rate Limit для логина (отдельно, чтобы брутфорс не блокировал весь сайт) ---
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 минут
+  max: 20, // максимум 20 попыток за 15 минут
+  message: { success: false, error: 'Слишком много попыток входа. Попробуйте через 15 минут.' },
+  standardHeaders: true,
+  legacyHeaders: false
+});
+app.use('/api/login', loginLimiter);
+app.use('/api/register', loginLimiter);
 
 // --- Static files ---
 if (config.launcherDistDir && fs.existsSync(config.launcherDistDir)) {
@@ -70,7 +83,11 @@ app.get('/admin', (req, res) => {
 // --- Routes ---
 app.use('/api', authRoutes);
 app.use('/api', apiRoutes);
-app.use('/api', adminRoutes);
+// Админ-роуты монтируются на /api/admin (совпадает с путями фронта admin.js:
+// он зовёт /api/admin/users, /api/admin/stats и т.д.) и закрыты авторизацией:
+// сперва проверяется валидный JWT (authenticateToken), затем флаг is_admin (requireAdmin).
+// Раньше роутер висел на /api БЕЗ защиты — любой мог заливать jar и управлять юзерами.
+app.use('/api/admin', authenticateToken, requireAdmin, adminRoutes);
 
 // --- Health check ---
 app.get('/health', (req, res) => {
@@ -92,6 +109,28 @@ app.use((err, req, res, next) => {
 
 // --- Start server ---
 let server;
+
+// Проверка секретов перед стартом. JWT-секрет по умолчанию ('change-me-in-production')
+// означает, что кто угодно может подписать токен с is_admin:1 и обойти всю авторизацию
+// админки — тогда Fix с authenticateToken/requireAdmin бесполезен. Аналогично дефолтный
+// пароль админа известен из исходников. В production это фатально — сервер не стартует,
+// пока в окружении (Render → Environment) не заданы JWT_SECRET, JWT_REFRESH_SECRET и ADMIN_PASSWORD.
+function checkSecrets() {
+  const isProd = (process.env.NODE_ENV === 'production');
+  const problems = [];
+  if (config.jwtSecret === 'change-me-in-production') problems.push('JWT_SECRET не задан (используется дефолт)');
+  if (config.jwtRefreshSecret === 'change-me-in-production') problems.push('JWT_REFRESH_SECRET не задан (используется дефолт)');
+  if (!process.env.ADMIN_PASSWORD) problems.push('ADMIN_PASSWORD не задан (используется дефолтный пароль админа)');
+  if (problems.length === 0) return;
+
+  if (isProd) {
+    logger.error('НЕБЕЗОПАСНАЯ КОНФИГУРАЦИЯ, старт запрещён:\n  - ' + problems.join('\n  - '));
+    logger.error('Задайте эти переменные окружения (на Render: Environment) и передеплойте.');
+    process.exit(1);
+  } else {
+    logger.warn('Небезопасные секреты по умолчанию (ОК для локальной разработки):\n  - ' + problems.join('\n  - '));
+  }
+}
 
 async function seedAdminUser() {
   // Гарантирует наличие админ-аккаунта после каждого запуска (важно для Render:
@@ -138,6 +177,7 @@ function startKeepAlive() {
 
 async function startServer() {
   try {
+    checkSecrets();
     await seedAdminUser();
     logger.info('База данных готова к работе');
 
