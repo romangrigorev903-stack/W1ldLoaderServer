@@ -447,4 +447,56 @@ router.post('/upload-client', upload.single('file'), async (req, res, next) => {
     }
 });
 
+// ===== CLIENTS CONFIG (мульти-клиент) =====
+
+const clientsConfigService = require('../services/clientsConfigService');
+
+router.get('/clients-config', async (req, res, next) => {
+    try {
+        const configs = clientsConfigService.getAllConfigs();
+        res.json({ success: true, clients: configs });
+    } catch (err) {
+        next(err);
+    }
+});
+
+router.post('/clients-config', async (req, res, next) => {
+    try {
+        const data = req.body;
+        if (!data.name || !data.mc_version) {
+            return res.json({ success: false, error: 'Заполните название и версию Minecraft' });
+        }
+        const config = clientsConfigService.createConfig(data);
+        res.json({ success: true, client: config });
+    } catch (err) {
+        next(err);
+    }
+});
+
+router.put('/clients-config/:id', async (req, res, next) => {
+    try {
+        const { id } = req.params;
+        const updated = clientsConfigService.updateConfig(id, req.body);
+        if (!updated) {
+            return res.json({ success: false, error: 'Конфигурация не найдена' });
+        }
+        res.json({ success: true, client: updated });
+    } catch (err) {
+        next(err);
+    }
+});
+
+router.delete('/clients-config/:id', async (req, res, next) => {
+    try {
+        const { id } = req.params;
+        const removed = clientsConfigService.deleteConfig(id);
+        if (!removed) {
+            return res.json({ success: false, error: 'Конфигурация не найдена' });
+        }
+        res.json({ success: true, message: 'Конфигурация удалена' });
+    } catch (err) {
+        next(err);
+    }
+});
+
 module.exports = router;

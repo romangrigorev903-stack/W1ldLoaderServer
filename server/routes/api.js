@@ -148,4 +148,28 @@ router.get('/news', (req, res) => {
     res.json({ success: true, news: news });
 });
 
+// Скачивание произвольного мода по имени (из storage/clients/)
+router.get('/download-mod', (req, res) => {
+    const name = req.query.name;
+    if (!name) return res.status(400).json({ success: false, error: 'Не указано имя файла' });
+    const modPath = path.join(__dirname, '..', '..', 'storage', 'clients', path.basename(name));
+    if (!fs.existsSync(modPath)) {
+        return res.status(404).json({ success: false, error: 'Файл ' + name + ' не загружен' });
+    }
+    const stat = fs.statSync(modPath);
+    res.writeHead(200, {
+        'Content-Type': 'application/java-archive',
+        'Content-Length': stat.size,
+        'Content-Disposition': 'attachment; filename="' + name + '"',
+    });
+    fs.createReadStream(modPath).pipe(res);
+});
+
+// Публичный: список доступных клиентов для лаунчера (только активные)
+router.get('/clients-config', (req, res) => {
+    const clientsConfigService = require('../services/clientsConfigService');
+    const clients = clientsConfigService.getAllConfigs(true);
+    res.json({ success: true, clients: clients });
+});
+
 module.exports = router;

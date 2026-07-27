@@ -31,4 +31,24 @@ db.exec(`CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT,
 db.exec(`CREATE TABLE IF NOT EXISTS clients (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, version TEXT NOT NULL, description TEXT, image_url TEXT, download_url TEXT, is_active INTEGER DEFAULT 1, created_at TEXT DEFAULT (datetime('now')))`);
 db.exec(`CREATE TABLE IF NOT EXISTS buttons (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, icon TEXT, action_url TEXT, order_index INTEGER DEFAULT 0, is_active INTEGER DEFAULT 1, created_at TEXT DEFAULT (datetime('now')))`);
 
+// Новая таблица для мульти-клиента — расширенная конфигурация запуска
+db.exec(`CREATE TABLE IF NOT EXISTS clients_config (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    description TEXT DEFAULT '',
+    mc_version TEXT NOT NULL,
+    loader_type TEXT DEFAULT 'fabric',
+    loader_version TEXT DEFAULT '',
+    loader_profile_url TEXT DEFAULT '',
+    fabric_api_version TEXT DEFAULT '',
+    mods TEXT DEFAULT '[]',
+    jvm_args TEXT DEFAULT '[]',
+    default_ram INTEGER DEFAULT 1536,
+    banner_url TEXT DEFAULT '',
+    is_active INTEGER DEFAULT 1,
+    is_beta INTEGER DEFAULT 0,
+    is_premium INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now'))
+)`);
+
 module.exports = db;
