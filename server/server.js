@@ -37,9 +37,23 @@ if (config.launcherDistDir && fs.existsSync(config.launcherDistDir)) {
   app.use(express.static(config.launcherDistDir));
 }
 
+// --- Static: публичный сайт (регистрация, вход, админка) ---
+// index:false — чтобы запрос на "/" не отдавал автоматически index.html,
+// а попадал в явный маршрут ниже (лендинг).
+const publicDir = path.join(__dirname, '../public');
+app.use(express.static(publicDir, { index: false }));
+
 // --- Главная страница (Лендинг) ---
 app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, '../public/landing.html'));
+  res.sendFile(path.join(publicDir, 'landing.html'));
+});
+
+// --- Удобные адреса страниц ---
+app.get(['/register', '/login', '/auth'], (req, res) => {
+  res.sendFile(path.join(publicDir, 'index.html'));
+});
+app.get('/admin', (req, res) => {
+  res.sendFile(path.join(publicDir, 'admin.html'));
 });
 
 // --- Routes ---
