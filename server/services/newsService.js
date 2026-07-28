@@ -1,6 +1,6 @@
 const fs = require('fs');
 const path = require('path');
-const config = require('../config/config');
+const db = require('../database/db');
 
 function resolveNewsDir() {
     const newsDir = path.join(__dirname, '..', '..', 'storage', 'news');
@@ -10,37 +10,24 @@ function resolveNewsDir() {
     return newsDir;
 }
 
-function getNewsFilePath(id) {
-    return path.join(resolveNewsDir(), id + '.json');
-}
-
-function getAllNewsFiles() {
+function migrateLegacyNews() {
     const newsDir = resolveNewsDir();
-    if (!fs.existsSync(newsDir)) return [];
-    return fs.readdirSync(newsDir).filter(f => f.endsWith('.json'));
-}
-
-function readNewsFile(id) {
-    const filePath = getNewsFilePath(id);
-    if (!fs.existsSync(filePath)) return null;
-    try {
-        return JSON.parse(fs.readFileSync(filePath, 'utf8'));
-    } catch (err) {
-        return null;
+    const insert = db.prepare(`
+        INSERT OR IGNORE INTO news (id, title, content, timestamp, image)
+        VALUES (?, ?, ?, ?, ?)
+    `);
+    for (const file of fs.readdirSync(newsDir).filter((name) => name.endsWith('.json'))) {
+        try {
+            const item = JSON.parse(fs.readFileSync(path.join(newsDir, file), 'utf8'));
+            const id = String(item.id || path.basename(file, '.json'));
+            insert.run(id, item.title || '', item.content || '', item.timestamp || new Date().toISOString(), item.image || '');
+        } catch (error) {
+            // Keep malformed legacy files untouched so they can be inspected manually.
+        }
     }
 }
 
-function writeNewsFile(id, data) {
-    const filePath = getNewsFilePath(id);
-    fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
-}
-
-function deleteNewsFile(id) {
-    const filePath = getNewsFilePath(id);
-    if (fs.existsSync(filePath)) {
-        fs.unlinkSync(filePath);
-    }
-}
+migrateLegacyNews();
 
 function createNews(data) {
     const id = Date.now().toString(36) + Math.random().toString(36).substring(2, 8);
@@ -51,26 +38,21 @@ function createNews(data) {
         timestamp: new Date().toISOString(),
         image: data.image || ''
     };
-    writeNewsFile(id, news);
+    db.prepare('INSERT INTO news (id, title, content, timestamp, image) VALUES (?, ?, ?, ?, ?)').run(
+        news.id, news.title, news.content, news.timestamp, news.image
+    );
     return news;
 }
 
 function getNews(id) {
     if (id) {
-        return readNewsFile(id);
+        return db.prepare('SELECT id, title, content, timestamp, image FROM news WHERE id = ?').get(id) || null;
     }
-    const files = getAllNewsFiles();
-    const news = [];
-    for (const file of files) {
-        const item = readNewsFile(path.basename(file, '.json'));
-        if (item) news.push(item);
-    }
-    news.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-    return news;
+    return db.prepare('SELECT id, title, content, timestamp, image FROM news ORDER BY timestamp DESC').all();
 }
 
 function updateNews(id, data) {
-    const existing = readNewsFile(id);
+    const existing = getNews(id);
     if (!existing) return null;
     const updated = {
         id: id,
@@ -79,15 +61,14 @@ function updateNews(id, data) {
         timestamp: existing.timestamp,
         image: data.image !== undefined ? data.image : existing.image
     };
-    writeNewsFile(id, updated);
+    db.prepare('UPDATE news SET title = ?, content = ?, image = ? WHERE id = ?').run(
+        updated.title, updated.content, updated.image, id
+    );
     return updated;
 }
 
 function removeNews(id) {
-    const existing = readNewsFile(id);
-    if (!existing) return false;
-    deleteNewsFile(id);
-    return true;
+    return db.prepare('DELETE FROM news WHERE id = ?').run(id).changes > 0;
 }
 
 module.exports = { createNews, getNews, updateNews, removeNews };

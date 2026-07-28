@@ -100,6 +100,8 @@ npm run dev
 | GET | `/api/tunnel-url` | Tunnel URL for launcher |
 | GET | `/api/launcher-version` | Launcher version info |
 | GET | `/api/client-version` | Client version info |
+| GET | `/api/clients-config` | Active Fabric client profiles |
+| GET | `/api/clients-config/:id/manifest` | Profile manifest with Java and mod hashes |
 | GET | `/api/download-client` | Download client zip |
 | GET | `/api/download-launcher` | Download launcher exe |
 | GET | `/api/buttons` | Active buttons |
@@ -129,6 +131,14 @@ Include the token in the Authorization header for protected routes:
 ```
 Authorization: Bearer <token>
 ```
+
+## Multi-client profiles
+
+- Supported Minecraft versions start at `1.16.5`.
+- The launcher currently supports Fabric profiles only.
+- `java_major` may be `8`, `17`, `21`, or `null` for automatic selection.
+- Automatic Java selection uses Java 8 for 1.16.5, Java 17 through 1.20.4, and Java 21 from 1.20.5.
+- The manifest returns every required `.jar` with its size and SHA-256 checksum.
 
 ## Deployment (Render)
 

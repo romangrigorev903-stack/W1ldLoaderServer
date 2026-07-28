@@ -11,6 +11,7 @@ node_modules/
 *.db-wal
 *.db-shm
 w1ld_auth.db*
+*-litestream/
 
 # Storage
 storage/*

@@ -1,0 +1,16 @@
+.git
+.gitignore
+.env
+node_modules
+logs
+test
+*.log
+*.db
+*.db-shm
+*.db-wal
+RENDER_SETUP.md
+run_tunnel.ps1
+W1ld_Manager.bat
+storage/clients/*.jar
+storage/clients/*.zip
+storage/clients/*.exe

@@ -6,6 +6,8 @@ const db = require('../database/db');
 const userService = require('../services/userService');
 const statsService = require('../services/statsService');
 const upload = require('../middleware/upload');
+const { normalizeClientConfig } = require('../utils/clientProfile');
+const clientStorage = require('../services/clientStorageService');
 
 // ===== USERS =====
 
@@ -390,6 +392,45 @@ router.post('/users/:id/unban', async (req, res, next) => {
     }
 });
 
+// ===== FILES =====
+
+router.get('/files', async (req, res, next) => {
+    try {
+        const files = await clientStorage.listFiles();
+        res.json({ success: true, files: files });
+    } catch (err) {
+        next(err);
+    }
+});
+
+router.delete('/files/:name', async (req, res, next) => {
+    try {
+        const name = path.basename(req.params.name);
+        const usedBy = db.prepare('SELECT name, mods FROM clients_config').all().filter((client) => {
+            try {
+                const mods = JSON.parse(client.mods || '[]');
+                return Array.isArray(mods) && mods.includes(name);
+            } catch (error) {
+                return false;
+            }
+        }).map((client) => client.name);
+        if (usedBy.length > 0) {
+            return res.status(409).json({
+                success: false,
+                error: 'Файл используется профилями: ' + usedBy.join(', '),
+            });
+        }
+        const removed = await clientStorage.deleteFile(name);
+        if (removed) {
+            res.json({ success: true });
+        } else {
+            res.json({ success: false, error: 'Файл не найден' });
+        }
+    } catch (err) {
+        next(err);
+    }
+});
+
 // ===== UPLOAD CLIENT =====
 
 // Стабильные имена «слотов» — по ним отдаются файлы лаунчеру.
@@ -407,49 +448,59 @@ router.post('/upload-client', upload.single('file'), async (req, res, next) => {
 
         const version = req.body.version || '1.0.0';
         const ext = path.extname(req.file.originalname).toLowerCase();
+        const type = (req.body.type || 'wild').toLowerCase();
 
-        // Для .jar кладём в стабильный слот (wild/fabric-api/baritone), чтобы лаунчер тянул по фикс-имени.
+        // Для .jar кладём в стабильный слот или используем оригинальное имя
         if (ext === '.jar') {
-            const type = (req.body.type || 'wild').toLowerCase();
-            const slotName = JAR_SLOTS[type];
+            let slotName = JAR_SLOTS[type];
             if (!slotName) {
-                try { fs.unlinkSync(req.file.path); } catch (e) {}
-                return res.json({ success: false, error: 'Неизвестный тип jar: ' + type });
+                // Если тип "custom" или просто не в списке — сохраняем с оригинальным именем
+                slotName = path.basename(req.file.originalname);
             }
-            const dir = path.join(__dirname, '..', '..', 'storage', 'clients');
-            const slotPath = path.join(dir, slotName);
-            try {
-                fs.copyFileSync(req.file.path, slotPath);
-                fs.unlinkSync(req.file.path);
-            } catch (e) {
-                return res.json({ success: false, error: 'Ошибка сохранения: ' + e.message });
-            }
+
+            const stored = await clientStorage.putFile(slotName, req.file.path);
             return res.json({
                 success: true,
-                message: 'Jar загружен в слот «' + type + '»',
-                file: { originalName: req.file.originalname, slot: type, filename: slotName, size: req.file.size, version: version }
+                message: 'Jar загружен как «' + slotName + '»',
+                file: { originalName: req.file.originalname, slot: type, filename: slotName, size: stored.size, version: version }
             });
         }
 
+        const cleanOriginalName = path.basename(req.file.originalname).replace(/[^a-zA-Z0-9._-]/g, '_');
+        const storedName = Date.now() + '-' + cleanOriginalName;
+        const stored = await clientStorage.putFile(storedName, req.file.path);
         res.json({
             success: true,
             message: 'Файл загружен',
             file: {
                 originalName: req.file.originalname,
-                filename: req.file.filename,
-                size: req.file.size,
+                filename: stored.name,
+                size: stored.size,
                 version: version,
-                path: req.file.path
+                backend: clientStorage.backend
             }
         });
     } catch (err) {
         next(err);
+    } finally {
+        if (req.file && req.file.path) {
+            fs.promises.unlink(req.file.path).catch(() => {});
+        }
     }
 });
 
 // ===== CLIENTS CONFIG (мульти-клиент) =====
 
 const clientsConfigService = require('../services/clientsConfigService');
+
+async function getAvailableModNames() {
+    const files = await clientStorage.listFiles();
+    return new Set(files.filter((file) => file.ext === '.jar').map((file) => file.name));
+}
+
+async function prepareClientConfig(data) {
+    return normalizeClientConfig(data, await getAvailableModNames());
+}
 
 router.get('/clients-config', async (req, res, next) => {
     try {
@@ -462,7 +513,11 @@ router.get('/clients-config', async (req, res, next) => {
 
 router.post('/clients-config', async (req, res, next) => {
     try {
-        const data = req.body;
+        const prepared = await prepareClientConfig(req.body);
+        if (prepared.errors.length > 0) {
+            return res.status(400).json({ success: false, error: prepared.errors.join('; ') });
+        }
+        const data = prepared.value;
         if (!data.name || !data.mc_version) {
             return res.json({ success: false, error: 'Заполните название и версию Minecraft' });
         }
@@ -476,7 +531,15 @@ router.post('/clients-config', async (req, res, next) => {
 router.put('/clients-config/:id', async (req, res, next) => {
     try {
         const { id } = req.params;
-        const updated = clientsConfigService.updateConfig(id, req.body);
+        const existing = clientsConfigService.getConfigById(id);
+        if (!existing) {
+            return res.status(404).json({ success: false, error: 'Конфигурация не найдена' });
+        }
+        const prepared = await prepareClientConfig({ ...existing, ...req.body });
+        if (prepared.errors.length > 0) {
+            return res.status(400).json({ success: false, error: prepared.errors.join('; ') });
+        }
+        const updated = clientsConfigService.updateConfig(id, prepared.value);
         if (!updated) {
             return res.json({ success: false, error: 'Конфигурация не найдена' });
         }

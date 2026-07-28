@@ -212,11 +212,33 @@ tbody tr:hover{background:rgba(255,255,255,0.02);}
                     <div class="form-group"><label>Версия Minecraft</label><input type="text" id="mcMcVersion" placeholder="1.21.8"></div>
                 </div>
                 <div class="form-row">
-                    <div class="form-group"><label>Загрузчик</label><select id="mcLoaderType" class="search-input"><option value="fabric">Fabric</option><option value="forge">Forge</option><option value="vanilla">Vanilla</option><option value="quilt">Quilt</option></select></div>
+                    <div class="form-group"><label>Загрузчик</label><select id="mcLoaderType" class="search-input"><option value="fabric">Fabric</option></select></div>
                     <div class="form-group"><label>Версия загрузчика</label><input type="text" id="mcLoaderVersion" placeholder="0.19.3"></div>
+                </div>
+                <div class="form-group">
+                    <label>Java</label>
+                    <select id="mcJavaMajor" class="search-input">
+                        <option value="auto">Автоматически по версии Minecraft</option>
+                        <option value="8">Java 8</option>
+                        <option value="17">Java 17</option>
+                        <option value="21">Java 21</option>
+                    </select>
                 </div>
                 <div class="form-group"><label>URL баннера (опционально)</label><input type="text" id="mcBannerUrl" placeholder="https://..."></div>
                 <div class="form-group"><label>Описание</label><textarea id="mcDescription" placeholder="Описание клиента..."></textarea></div>
+
+                <div class="form-group">
+                    <label>Моды (выберите из загруженных)</label>
+                    <div id="mcModsContainer" style="background:rgba(0,0,0,0.3);border-radius:10px;padding:12px;max-height:200px;overflow-y:auto;display:grid;grid-template-columns:repeat(auto-fill, minmax(200px, 1fr));gap:8px;border:1px solid rgba(255,255,255,0.05);">
+                        <div style="color:#555770;font-size:12px;">Загрузка файлов...</div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>JVM Аргументы (через запятую или пробел)</label>
+                    <textarea id="mcJvmArgs" placeholder="-Xmx2G, -Dsun.java2d.opengl=true"></textarea>
+                </div>
+
                 <div class="checkbox-row"><input type="checkbox" id="mcActive" checked><label for="mcActive">Активен</label></div>
                 <div class="checkbox-row"><input type="checkbox" id="mcBeta"><label for="mcBeta">Бета</label></div>
                 <div class="checkbox-row"><input type="checkbox" id="mcPremium"><label for="mcPremium">Премиум</label></div>
@@ -256,11 +278,12 @@ tbody tr:hover{background:rgba(255,255,255,0.02);}
         <!-- Files Tab -->
         <div class="tab-content" id="tab-files">
             <div class="card">
-                <div class="card-title">Загрузить файл клиента</div>
+                <div class="card-title">Загрузить файл (мод/клиент)</div>
                 <form id="uploadForm">
                     <div class="form-group">
-                        <label>Тип файла</label>
+                        <label>Тип/Назначение</label>
                         <select id="jarType" class="search-input">
+                            <option value="custom">Обычный файл (оригинальное имя)</option>
                             <option value="wild">wild.jar — клиент-мод</option>
                             <option value="fabric-api">fabric-api.jar</option>
                             <option value="baritone">baritone.jar</option>
@@ -271,12 +294,21 @@ tbody tr:hover{background:rgba(255,255,255,0.02);}
                         <input type="file" id="clientFile" accept=".jar,.zip,.exe" required>
                     </div>
                     <div class="form-group">
-                        <label>Версия</label>
+                        <label>Версия (для инфо)</label>
                         <input type="text" id="clientVersion" placeholder="например 1.0.0" required>
                     </div>
                     <button type="submit" class="btn btn-primary">Загрузить</button>
                 </form>
                 <div id="uploadMsg" class="msg"></div>
+            </div>
+            <div class="card">
+                <div class="card-title">Файлы в хранилище (storage/clients)</div>
+                <div style="overflow-x:auto;">
+                    <table>
+                        <thead><tr><th>Имя файла</th><th>Размер</th><th>Дата</th><th>Действие</th></tr></thead>
+                        <tbody id="filesTableBody"></tbody>
+                    </table>
+                </div>
             </div>
         </div>
     </div>

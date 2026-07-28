@@ -1,0 +1,22 @@
+logging:
+  level: info
+
+snapshot:
+  interval: 24h
+  retention: 168h
+
+dbs:
+  - path: ${DB_PATH}
+    restore-if-db-not-exists: true
+    replica:
+      type: s3
+      bucket: ${S3_BUCKET}
+      path: ${S3_DATABASE_PREFIX}w1ld_auth.db
+      region: ${S3_REGION}
+      endpoint: ${S3_ENDPOINT}
+      access-key-id: ${S3_ACCESS_KEY_ID}
+      secret-access-key: ${S3_SECRET_ACCESS_KEY}
+      force-path-style: ${S3_FORCE_PATH_STYLE}
+      sync-interval: 1s
+
+exec: node server/server.js

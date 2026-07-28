@@ -5,6 +5,7 @@ const path = require('path');
 const config = require('../config/config');
 const helpers = require('../utils/helpers');
 const cache = require('../utils/cache');
+const clientStorage = require('../services/clientStorageService');
 
 function getPublicUrl() {
     const candidates = [
@@ -70,35 +71,52 @@ router.get('/client-version', (req, res) => {
     res.json({ success: true, version: '1.0.1', changelog: 'Исправлено скачивание, улучшена стабильность' });
 });
 
-// Отдаёт jar-файл из стабильного слота storage/clients/<slotName>.
-function serveJarSlot(res, slotName, downloadName) {
-    const jarPath = path.join(__dirname, '..', '..', 'storage', 'clients', slotName);
-    if (!fs.existsSync(jarPath)) {
+function sendStoredFile(res, file, downloadName) {
+    const headerName = String(downloadName || file.name).replace(/[^ -~]|["\\]/g, '_');
+    res.writeHead(200, {
+        'Content-Type': file.contentType || 'application/octet-stream',
+        'Content-Length': file.size,
+        'Content-Disposition': 'attachment; filename="' + headerName + '"',
+    });
+    file.stream.on('error', (error) => res.destroy(error));
+    file.stream.pipe(res);
+}
+
+// Отдаёт jar-файл из стабильного слота локального или S3-хранилища.
+async function serveJarSlot(res, slotName, downloadName) {
+    const file = await clientStorage.openRead(slotName);
+    if (!file) {
         return res.status(404).json({ success: false, error: slotName + ' не загружен на сервер' });
     }
-    const stat = fs.statSync(jarPath);
-    res.writeHead(200, {
-        'Content-Type': 'application/java-archive',
-        'Content-Length': stat.size,
-        'Content-Disposition': 'attachment; filename="' + (downloadName || slotName) + '"',
-    });
-    fs.createReadStream(jarPath).pipe(res);
+    sendStoredFile(res, file, downloadName || slotName);
     console.log('[Jar] Sent:', slotName);
 }
 
 // wild.jar — сам мод-клиент.
-router.get('/download-client', (req, res) => {
-    serveJarSlot(res, 'wild.jar', 'wild.jar');
+router.get('/download-client', async (req, res, next) => {
+    try {
+        await serveJarSlot(res, 'wild.jar', 'wild.jar');
+    } catch (error) {
+        next(error);
+    }
 });
 
 // fabric-api.jar
-router.get('/download-fabric-api', (req, res) => {
-    serveJarSlot(res, 'fabric-api.jar', 'fabric-api.jar');
+router.get('/download-fabric-api', async (req, res, next) => {
+    try {
+        await serveJarSlot(res, 'fabric-api.jar', 'fabric-api.jar');
+    } catch (error) {
+        next(error);
+    }
 });
 
 // baritone.jar (опционально)
-router.get('/download-baritone', (req, res) => {
-    serveJarSlot(res, 'baritone.jar', 'baritone.jar');
+router.get('/download-baritone', async (req, res, next) => {
+    try {
+        await serveJarSlot(res, 'baritone.jar', 'baritone.jar');
+    } catch (error) {
+        next(error);
+    }
 });
 
 router.get('/download-launcher', (req, res) => {
@@ -148,21 +166,19 @@ router.get('/news', (req, res) => {
     res.json({ success: true, news: news });
 });
 
-// Скачивание произвольного мода по имени (из storage/clients/)
-router.get('/download-mod', (req, res) => {
-    const name = req.query.name;
-    if (!name) return res.status(400).json({ success: false, error: 'Не указано имя файла' });
-    const modPath = path.join(__dirname, '..', '..', 'storage', 'clients', path.basename(name));
-    if (!fs.existsSync(modPath)) {
-        return res.status(404).json({ success: false, error: 'Файл ' + name + ' не загружен' });
+// Скачивание произвольного мода по имени из локального или S3-хранилища.
+router.get('/download-mod', async (req, res, next) => {
+    try {
+        const name = req.query.name;
+        if (!name) return res.status(400).json({ success: false, error: 'Не указано имя файла' });
+        const file = await clientStorage.openRead(name);
+        if (!file) {
+            return res.status(404).json({ success: false, error: 'Файл ' + name + ' не загружен' });
+        }
+        sendStoredFile(res, file, file.name);
+    } catch (error) {
+        next(error);
     }
-    const stat = fs.statSync(modPath);
-    res.writeHead(200, {
-        'Content-Type': 'application/java-archive',
-        'Content-Length': stat.size,
-        'Content-Disposition': 'attachment; filename="' + name + '"',
-    });
-    fs.createReadStream(modPath).pipe(res);
 });
 
 // Публичный: список доступных клиентов для лаунчера (только активные)
@@ -170,6 +186,24 @@ router.get('/clients-config', (req, res) => {
     const clientsConfigService = require('../services/clientsConfigService');
     const clients = clientsConfigService.getAllConfigs(true);
     res.json({ success: true, clients: clients });
+});
+
+router.get('/clients-config/:id/manifest', async (req, res, next) => {
+    try {
+        const clientsConfigService = require('../services/clientsConfigService');
+        const clientManifestService = require('../services/clientManifestService');
+        const client = clientsConfigService.getConfigById(req.params.id);
+        if (!client || client.is_active !== 1) {
+            return res.status(404).json({ success: false, error: 'Конфигурация клиента не найдена' });
+        }
+        if (String(client.loader_type).toLowerCase() !== 'fabric') {
+            return res.status(409).json({ success: false, error: 'Поддерживается только Fabric' });
+        }
+        const manifest = await clientManifestService.buildManifest(client);
+        res.json({ success: true, ...manifest });
+    } catch (err) {
+        next(err);
+    }
 });
 
 module.exports = router;

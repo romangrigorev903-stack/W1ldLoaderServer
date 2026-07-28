@@ -83,6 +83,7 @@
             if (tabName === 'news') loadNews();
             if (tabName === 'users') loadUsers();
             if (tabName === 'stats') loadStats();
+            if (tabName === 'files') loadFiles();
         });
     });
 
@@ -173,6 +174,51 @@
 
     var userSearch = document.getElementById('userSearch');
     if (userSearch) userSearch.addEventListener('input', loadUsers);
+
+    // ===== FILES =====
+    var allFiles = [];
+    window.loadFiles = function() {
+        api('/api/admin/files').then(function(r) { return r.json(); }).then(function(d) {
+            if (!d.success) return;
+            allFiles = d.files || [];
+            var tbody = document.getElementById('filesTableBody');
+            if (!tbody) return;
+            tbody.innerHTML = allFiles.length ? allFiles.map(function(f) {
+                var size = (f.size / 1024 / 1024).toFixed(2) + ' MB';
+                var date = new Date(f.mtime).toLocaleString();
+                return '<tr>' +
+                    '<td><b>' + esc(f.name) + '</b></td>' +
+                    '<td>' + size + '</td>' +
+                    '<td style="font-size:12px;color:#8889a0;">' + date + '</td>' +
+                    '<td><button class="btn btn-danger btn-sm" onclick="deleteFile(\'' + esc(f.name) + '\')">Удалить</button></td>' +
+                    '</tr>';
+            }).join('') : '<tr><td colspan="4" style="text-align:center;color:#555770;padding:24px;">Файлов нет</td></tr>';
+
+            updateModsCheckboxes();
+        }).catch(function() {});
+    };
+
+    window.deleteFile = function(name) {
+        if (!confirm('Удалить файл ' + name + '?')) return;
+        api('/api/admin/files/' + encodeURIComponent(name), { method: 'DELETE' }).then(function(r) { return r.json(); }).then(function(d) {
+            toast(d.success ? 'Файл удалён' : (d.error || 'Ошибка'), d.success ? 'success' : 'error');
+            if (d.success) loadFiles();
+        }).catch(function() {});
+    };
+
+    function updateModsCheckboxes(selectedMods) {
+        var container = document.getElementById('mcModsContainer');
+        if (!container) return;
+        if (!allFiles.length) { container.innerHTML = '<div style="color:#555770;font-size:12px;">Сначала загрузите моды во вкладке Файлы</div>'; return; }
+
+        container.innerHTML = allFiles.filter(function(f) { return f.ext === '.jar'; }).map(function(f) {
+            var checked = (selectedMods || []).indexOf(f.name) !== -1 ? 'checked' : '';
+            return '<div class="checkbox-row" style="margin-bottom:4px;">' +
+                '<input type="checkbox" class="mc-mod-checkbox" value="' + esc(f.name) + '" id="mod_' + esc(f.name) + '" ' + checked + '>' +
+                '<label for="mod_' + esc(f.name) + '" style="font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="' + esc(f.name) + '">' + esc(f.name) + '</label>' +
+                '</div>';
+        }).join('');
+    }
 
     // ===== NEWS =====
     window.loadNews = function() {
@@ -374,18 +420,19 @@
     // ===== MULTI-CLIENTS =====
     var editingMc = null;
     window.loadMultiClients = function() {
+        if (!allFiles.length) loadFiles();
         api('/api/admin/clients-config').then(function(r) { return r.json(); }).then(function(d) {
             var list = document.getElementById('mcList');
             if (!list) return;
             if (!d.success || !d.clients || !d.clients.length) { list.innerHTML = '<div class="empty">Мульти-клиентов нет. Добавьте первого!</div>'; return; }
             list.innerHTML = d.clients.map(function(c) {
-                var loaderLabel = c.loader_type === 'vanilla' ? 'Vanilla' : (c.loader_type.charAt(0).toUpperCase() + c.loader_type.slice(1) + ' ' + c.loader_version);
+                var loaderLabel = 'Fabric ' + c.loader_version + ' · Java ' + c.resolved_java_major;
                 return '<div class="item-row"><div class="item-info"><h4>' + esc(c.name) + ' <span style="color:#8889a0;font-weight:400;">MC ' + esc(c.mc_version) + '</span>' +
                     (c.is_active ? ' <span class="badge active" style="font-size:11px;">Активен</span>' : ' <span class="badge banned" style="font-size:11px;">Неактивен</span>') +
                     (c.is_beta ? ' <span class="badge admin" style="font-size:11px;">Бета</span>' : '') +
                     (c.is_premium ? ' <span class="badge admin" style="font-size:11px;">Premium</span>' : '') +
                     '</h4><p>' + esc((c.description||'').substring(0,80)) + ' · ' + esc(loaderLabel) + '</p></div>' +
-                    '<div class="item-actions"><button class="btn btn-secondary btn-sm" onclick="editMc(' + JSON.stringify(c).replace(/"/g,'"') + ')">✏️</button>' +
+                    '<div class="item-actions"><button class="btn btn-secondary btn-sm" onclick="editMc(' + JSON.stringify(c).replace(/"/g,'&quot;') + ')">✏️</button>' +
                     '<button class="btn btn-danger btn-sm" onclick="deleteMc(' + c.id + ')">🗑️</button></div></div>';
             }).join('');
         }).catch(function() {});
@@ -397,11 +444,21 @@
         document.getElementById('mcMcVersion').value = c.mc_version || '';
         document.getElementById('mcLoaderType').value = c.loader_type || 'fabric';
         document.getElementById('mcLoaderVersion').value = c.loader_version || '';
+        document.getElementById('mcJavaMajor').value = c.java_major || 'auto';
         document.getElementById('mcBannerUrl').value = c.banner_url || '';
         document.getElementById('mcDescription').value = c.description || '';
         document.getElementById('mcActive').checked = !!c.is_active;
         document.getElementById('mcBeta').checked = !!c.is_beta;
         document.getElementById('mcPremium').checked = !!c.is_premium;
+
+        var mods = [];
+        try { mods = typeof c.mods === 'string' ? JSON.parse(c.mods) : (c.mods || []); } catch(e) {}
+        updateModsCheckboxes(mods);
+
+        var jvm = [];
+        try { jvm = typeof c.jvm_args === 'string' ? JSON.parse(c.jvm_args) : (c.jvm_args || []); } catch(e) {}
+        document.getElementById('mcJvmArgs').value = jvm.join(', ');
+
         document.getElementById('mcFormTitle').textContent = 'Редактировать мульти-клиент';
         document.getElementById('cancelMcBtn').style.display = 'inline-block';
     };
@@ -419,32 +476,42 @@
         var name = document.getElementById('mcName').value.trim();
         var mcVersion = document.getElementById('mcMcVersion').value.trim();
         if (!name || !mcVersion) { showMsg('mcMsg', 'Заполните название и версию MC', 'error'); return; }
+
+        var mods = [];
+        document.querySelectorAll('.mc-mod-checkbox:checked').forEach(function(cb) { mods.push(cb.value); });
+
+        var jvmRaw = document.getElementById('mcJvmArgs').value.trim();
+        var jvmArgs = jvmRaw ? jvmRaw.split(/[, \n]+/).map(function(s) { return s.trim(); }).filter(Boolean) : [];
+
         var body = {
             name: name,
             mc_version: mcVersion,
             loader_type: document.getElementById('mcLoaderType').value,
             loader_version: document.getElementById('mcLoaderVersion').value.trim(),
+            java_major: document.getElementById('mcJavaMajor').value === 'auto' ? null : parseInt(document.getElementById('mcJavaMajor').value),
             banner_url: document.getElementById('mcBannerUrl').value.trim(),
             description: document.getElementById('mcDescription').value.trim(),
             is_active: document.getElementById('mcActive').checked,
             is_beta: document.getElementById('mcBeta').checked,
             is_premium: document.getElementById('mcPremium').checked,
-            mods: [],
-            jvm_args: []
+            mods: mods,
+            jvm_args: jvmArgs
         };
         var method = editingMc ? 'PUT' : 'POST';
         var path = editingMc ? '/api/admin/clients-config/' + editingMc : '/api/admin/clients-config';
         api(path, { method: method, body: JSON.stringify(body) }).then(function(r) { return r.json(); }).then(function(d) {
             if (d.success) {
                 showMsg('mcMsg', editingMc ? 'Обновлено' : 'Создано', 'success');
-                ['mcName','mcMcVersion','mcLoaderVersion','mcBannerUrl','mcDescription'].forEach(function(id) { document.getElementById(id).value = ''; });
+                ['mcName','mcMcVersion','mcLoaderVersion','mcBannerUrl','mcDescription','mcJvmArgs'].forEach(function(id) { document.getElementById(id).value = ''; });
                 document.getElementById('mcLoaderType').value = 'fabric';
+                document.getElementById('mcJavaMajor').value = 'auto';
                 document.getElementById('mcActive').checked = true;
                 document.getElementById('mcBeta').checked = false;
                 document.getElementById('mcPremium').checked = false;
                 editingMc = null;
                 document.getElementById('mcFormTitle').textContent = 'Добавить мульти-клиент';
                 document.getElementById('cancelMcBtn').style.display = 'none';
+                updateModsCheckboxes();
                 loadMultiClients();
             } else { showMsg('mcMsg', d.error || 'Ошибка', 'error'); }
         }).catch(function() { showMsg('mcMsg', 'Ошибка', 'error'); });
@@ -453,13 +520,15 @@
     var cancelMcBtn = document.getElementById('cancelMcBtn');
     if (cancelMcBtn) cancelMcBtn.addEventListener('click', function() {
         editingMc = null;
-        ['mcName','mcMcVersion','mcLoaderVersion','mcBannerUrl','mcDescription'].forEach(function(id) { document.getElementById(id).value = ''; });
+        ['mcName','mcMcVersion','mcLoaderVersion','mcBannerUrl','mcDescription','mcJvmArgs'].forEach(function(id) { document.getElementById(id).value = ''; });
         document.getElementById('mcLoaderType').value = 'fabric';
+        document.getElementById('mcJavaMajor').value = 'auto';
         document.getElementById('mcActive').checked = true;
         document.getElementById('mcBeta').checked = false;
         document.getElementById('mcPremium').checked = false;
         document.getElementById('mcFormTitle').textContent = 'Добавить мульти-клиент';
         cancelMcBtn.style.display = 'none';
+        updateModsCheckboxes();
     });
 
     // ===== FILE UPLOAD =====
@@ -469,7 +538,7 @@
         var file = document.getElementById('clientFile').files[0];
         var version = document.getElementById('clientVersion').value.trim();
         var jarTypeEl = document.getElementById('jarType');
-        var jarType = jarTypeEl ? jarTypeEl.value : 'wild';
+        var jarType = jarTypeEl ? jarTypeEl.value : 'custom';
         if (!file) { showMsg('uploadMsg', 'Выберите файл', 'error'); return; }
         if (!version) { showMsg('uploadMsg', 'Введите версию', 'error'); return; }
         var fd = new FormData();
@@ -479,7 +548,11 @@
         fetch(adminUrl + '/api/admin/upload-client', { method: 'POST', headers: { 'Authorization': 'Bearer ' + token }, body: fd })
             .then(function(r) { return r.json(); })
             .then(function(d) {
-                if (d.success) { showMsg('uploadMsg', 'Загружено: ' + d.file.filename + ' v' + d.file.version, 'success'); uploadForm.reset(); }
+                if (d.success) {
+                    showMsg('uploadMsg', 'Загружено: ' + d.file.filename, 'success');
+                    uploadForm.reset();
+                    loadFiles();
+                }
                 else { showMsg('uploadMsg', d.error || 'Ошибка', 'error'); }
             }).catch(function() { showMsg('uploadMsg', 'Ошибка загрузки', 'error'); });
     });

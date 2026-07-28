@@ -1,31 +1,43 @@
 const db = require('../database/db');
+const { resolveJavaMajor } = require('../utils/clientProfile');
+
+function parseJsonArray(value) {
+    try {
+        const parsed = JSON.parse(value || '[]');
+        return Array.isArray(parsed) ? parsed : [];
+    } catch (error) {
+        return [];
+    }
+}
+
+function mapConfig(row) {
+    if (!row) return null;
+    return {
+        ...row,
+        java_major: row.java_major === null ? null : Number(row.java_major),
+        resolved_java_major: resolveJavaMajor(row.mc_version, row.java_major),
+        mods: parseJsonArray(row.mods),
+        jvm_args: parseJsonArray(row.jvm_args),
+    };
+}
 
 function getAllConfigs(onlyActive = false) {
     let query = 'SELECT * FROM clients_config';
     if (onlyActive) query += ' WHERE is_active = 1';
     query += ' ORDER BY id DESC';
     const rows = db.prepare(query).all();
-    return rows.map(row => ({
-        ...row,
-        mods: JSON.parse(row.mods || '[]'),
-        jvm_args: JSON.parse(row.jvm_args || '[]'),
-    }));
+    return rows.map(mapConfig);
 }
 
 function getConfigById(id) {
     const row = db.prepare('SELECT * FROM clients_config WHERE id = ?').get(id);
-    if (!row) return null;
-    return {
-        ...row,
-        mods: JSON.parse(row.mods || '[]'),
-        jvm_args: JSON.parse(row.jvm_args || '[]'),
-    };
+    return mapConfig(row);
 }
 
 function createConfig(data) {
-    const result = db.prepare(`INSERT INTO clients_config 
-        (name, description, mc_version, loader_type, loader_version, loader_profile_url, fabric_api_version, mods, jvm_args, default_ram, banner_url, is_active, is_beta, is_premium) 
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    const result = db.prepare(`INSERT INTO clients_config
+        (name, description, mc_version, loader_type, loader_version, loader_profile_url, fabric_api_version, java_major, mods, jvm_args, default_ram, banner_url, is_active, is_beta, is_premium)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
         data.name,
         data.description || '',
@@ -34,6 +46,7 @@ function createConfig(data) {
         data.loader_version || '',
         data.loader_profile_url || '',
         data.fabric_api_version || '',
+        data.java_major,
         JSON.stringify(data.mods || []),
         JSON.stringify(data.jvm_args || []),
         data.default_ram || 1536,
@@ -59,6 +72,7 @@ function updateConfig(id, data) {
     if (data.loader_version !== undefined) { updates.push('loader_version = ?'); params.push(data.loader_version); }
     if (data.loader_profile_url !== undefined) { updates.push('loader_profile_url = ?'); params.push(data.loader_profile_url); }
     if (data.fabric_api_version !== undefined) { updates.push('fabric_api_version = ?'); params.push(data.fabric_api_version); }
+    if (data.java_major !== undefined) { updates.push('java_major = ?'); params.push(data.java_major); }
     if (data.mods !== undefined) { updates.push('mods = ?'); params.push(JSON.stringify(data.mods)); }
     if (data.jvm_args !== undefined) { updates.push('jvm_args = ?'); params.push(JSON.stringify(data.jvm_args)); }
     if (data.default_ram !== undefined) { updates.push('default_ram = ?'); params.push(data.default_ram); }

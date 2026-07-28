@@ -13,7 +13,8 @@ const apiRoutes = require('./routes/api');
 const adminRoutes = require('./routes/admin');
 const { authenticateToken } = require('./middleware/auth');
 const { requireAdmin } = require('./middleware/admin');
-const { hashPassword, getUserByUsername, createUser } = require('./services/userService');
+const { hashPassword, verifyPassword, getUserByUsername, createUser, updateUser } = require('./services/userService');
+const clientStorage = require('./services/clientStorageService');
 
 const app = express();
 
@@ -121,11 +122,14 @@ function checkSecrets() {
   if (config.jwtSecret === 'change-me-in-production') problems.push('JWT_SECRET не задан (используется дефолт)');
   if (config.jwtRefreshSecret === 'change-me-in-production') problems.push('JWT_REFRESH_SECRET не задан (используется дефолт)');
   if (!process.env.ADMIN_PASSWORD) problems.push('ADMIN_PASSWORD не задан (используется дефолтный пароль админа)');
+  if (/^(1|true|yes)$/i.test(process.env.REQUIRE_S3 || '') && clientStorage.backend !== 's3') {
+    problems.push('REQUIRE_S3 включён, но S3 настроен не полностью');
+  }
   if (problems.length === 0) return;
 
   if (isProd) {
     logger.error('НЕБЕЗОПАСНАЯ КОНФИГУРАЦИЯ, старт запрещён:\n  - ' + problems.join('\n  - '));
-    logger.error('Задайте эти переменные окружения (на Render: Environment) и передеплойте.');
+    logger.error('Задайте обязательные переменные окружения и передеплойте сервер.');
     process.exit(1);
   } else {
     logger.warn('Небезопасные секреты по умолчанию (ОК для локальной разработки):\n  - ' + problems.join('\n  - '));
@@ -133,13 +137,18 @@ function checkSecrets() {
 }
 
 async function seedAdminUser() {
-  // Гарантирует наличие админ-аккаунта после каждого запуска (важно для Render:
-  // на бесплатном плане файловая система эфемерна и БД сбрасывается при редеплое).
+  // Гарантирует наличие и актуальные production-данные админ-аккаунта.
   const username = process.env.ADMIN_USERNAME || 'admin';
   const password = process.env.ADMIN_PASSWORD || 'w1ld_admin_2026';
   try {
     const existing = getUserByUsername(username);
     if (existing) {
+      const updates = {};
+      if (existing.is_admin !== 1) updates.is_admin = 1;
+      if (process.env.ADMIN_PASSWORD && !(await verifyPassword(password, existing.password))) {
+        updates.password = await hashPassword(password);
+      }
+      if (Object.keys(updates).length > 0) updateUser(existing.id, updates);
       logger.info(`Админ-аккаунт "${username}" уже существует`);
       return;
     }
@@ -180,6 +189,7 @@ async function startServer() {
     checkSecrets();
     await seedAdminUser();
     logger.info('База данных готова к работе');
+    logger.info(`Хранилище клиентских файлов: ${clientStorage.backend}`);
 
     server = app.listen(config.port || 3000, () => {
       logger.info(`W1ld Auth Server v2.0.0 started on port ${config.port || 3000}`);

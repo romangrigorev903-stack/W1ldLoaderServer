@@ -1,17 +1,17 @@
 const multer = require('multer');
 const path = require('path');
-
 const fs = require('fs');
+const os = require('os');
 
 const storage = multer.diskStorage({
     destination: function (req, file, cb) {
-        const uploadDir = path.join(__dirname, '..', '..', 'storage', 'clients');
+        const uploadDir = process.env.UPLOAD_TEMP_DIR || path.join(os.tmpdir(), 'w1ld-uploads');
         try { fs.mkdirSync(uploadDir, { recursive: true }); } catch (e) {}
         cb(null, uploadDir);
     },
     filename: function (req, file, cb) {
         const ext = path.extname(file.originalname);
-        const basename = Date.now() + '-' + file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_');
+        const basename = Date.now() + '-' + Math.random().toString(16).slice(2);
         cb(null, basename + ext);
     }
 });
